@@ -56,12 +56,44 @@
     cursor: crosshair;
   }
 
+  /* start screen */
+  .start-title {
+    font-size: clamp(1.1rem, 3.6vw, 1.7rem);
+    font-weight: 900;
+    color: var(--gold);
+    letter-spacing: .16em;
+    text-indent: .16em;
+    text-shadow: 3px 3px 0 rgba(0,0,0,.55);
+  }
+  .start-sub { color: var(--dim); font-size: clamp(.78rem, 2.4vw, .95rem); letter-spacing: .2em; text-indent: .2em; }
+  .start-opts { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; margin-top: 6px; }
+  .opt {
+    font-family: inherit;
+    width: min(42vw, 270px);
+    padding: 16px 14px;
+    background: #1b1233;
+    border: 3px solid var(--gold);
+    box-shadow: 5px 5px 0 rgba(0,0,0,.5);
+    color: var(--text);
+    cursor: pointer;
+    transition: transform .08s, filter .12s;
+    text-align: center;
+  }
+  .opt:hover { filter: brightness(1.18); transform: translateY(-2px); }
+  .opt:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 rgba(0,0,0,.5); }
+  .opt-name { font-size: 1.05rem; font-weight: 900; letter-spacing: .14em; color: var(--gold); }
+  .opt.off { border-color: #e8e0d0; }
+  .opt.off .opt-name { color: #efe8d8; }
+  .opt-desc { margin-top: 10px; font-size: .85rem; line-height: 1.7; color: var(--text); }
+  .opt-hint { margin-top: 10px; font-size: .7rem; color: var(--dim); letter-spacing: .1em; }
+  .start-note { font-size: .7rem; color: var(--dim); }
+
   /* cognitive filter toggle */
   .filter-toggle {
     position: absolute;
     top: 10px;
     right: 10px;
-    z-index: 6;
+    z-index: 12;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -229,8 +261,8 @@
 <body>
 
 <header>
-  <h1>多伦多炮王</h1>
-  <div class="sub">SNAPFIRE 驻 CN TOWER 十年实录</div>
+  <h1 id="mainTitle">多伦多炮王</h1>
+  <div class="sub" id="mainSub">十年实录</div>
 </header>
 
 <div class="arena-wrap" id="wrap">
@@ -246,14 +278,26 @@
     <div class="tl-wrap"><div class="tl" id="tl"></div></div>
     <button class="btn" id="againBtn" type="button">再 来 十 年</button>
   </div>
+  <div class="overlay show" id="startOverlay">
+    <div class="start-title">多伦多 · 西恩塔 · 一门加农炮 · 十年</div>
+    <div class="start-sub">进塔之前,请先选择你的认知滤镜</div>
+    <div class="start-opts">
+      <button class="opt" id="optOn" type="button">
+        <div class="opt-name">认知滤镜 · 开</div>
+        <div class="opt-desc">电炎绝手驻守西恩塔<br>苦练大招精准度</div>
+        <div class="opt-hint">橙色岩浆弹 · 老少皆宜</div>
+      </button>
+      <button class="opt off" id="optOff" type="button">
+        <div class="opt-name">认知滤镜 · 关</div>
+        <div class="opt-desc">多伦多炮王登塔播种<br>十年不辍风雨无阻</div>
+        <div class="opt-hint">乳白色炮弹 · 后果自负</div>
+      </button>
+    </div>
+    <div class="start-note">进入后仍可随时用右上角开关切换</div>
+  </div>
 </div>
 
-<div class="legend">
-  <span><b>按住拖拽</b> 瞄准蓄力,松手开炮</span>
-  <span>命中<b>女英雄</b> = 收获代目 + 回 1 发弹药</span>
-  <span>命中<b>男英雄</b> = 当场塌房</span>
-  <span>空炮 = 白白浪费</span>
-</div>
+<div class="legend" id="legend"></div>
 
 <footer>
   非商业同人作品 · Dota 2 与 Snapfire 及相关英雄版权归 Valve Corporation 所有<br>
@@ -300,22 +344,116 @@
   })();
   var state = Sim.createGame(SEED);
 
-  /* cognitive filter: on = lava ball, off = the unfiltered truth */
+  /* ---------- two narrative themes, keyed by the cognitive filter ---------- */
+  var TH = {
+    on: {
+      docTitle: "电炎绝手 · 大招精准度特训",
+      title: "电炎绝手",
+      sub: "驻守西恩塔 · 大招精准度特训十年实录",
+      legend: [
+        "<b>按住拖拽</b> 瞄准蓄力,松手开炮",
+        "命中<b>女英雄</b> = 认证一次精准命中 + 回 1 发弹药",
+        "误伤<b>男英雄</b> = 特训事故,当场终止",
+        "脱靶 = 白白浪费"
+      ],
+      collectToast: function (c) {
+        return "第" + Sim.cnNum(c.gen) + "次精准命中 · " + c.name + (c.repeat ? "(二连击!)" : "");
+      },
+      maleToast: function (n) { return "特训事故!误伤了 " + n; },
+      missLines: ["脱靶!大招掉进了安大略湖", "脱靶!惊飞一滩海鸥", "脱靶!委员会记录在案", "脱靶!风速没算对", "脱靶!就当热身了"],
+      verdictBust: "特训事故", verdictDry: "特训结业",
+      badgeLabel: "获得评级:",
+      titles: [[0, "脱靶大师 · 十年零命中"], [1, "见习炮手"], [4, "神射学员"], [7, "百步穿杨"], [10, "大招满级 · 戈拉克亲授勋章"], [13, "人形自走炮台"]],
+      detailBust: function (n, y, hero, shots) {
+        return shots + " 发弹药,认证命中 " + n + " 次。" + y + " 年,一发大招误伤了路过的 <b>" + hero +
+          "</b>——轰炸特训委员会连夜把加农炮吊下西恩塔,十年特训就此画上句号。";
+      },
+      detailDry: function (n, y, shots) {
+        return shots + " 发弹药全部打完,认证精准命中 <b>" + n + "</b> 次。" + y +
+          " 年,电炎绝手拍了拍 Mortimer 的脑袋:『老伙计,这准头总算没给戈拉克丢人。』";
+      },
+      tlTitle: function (y0, y1, overtime) { return "—— 特训命中档案 " + y0 + "–" + y1 + (overtime ? "(加练)" : "") + " ——"; },
+      tlGen: function (c) { return "第" + Sim.cnNum(c.gen) + "中" + (c.repeat ? "(二连)" : ""); },
+      tlMale: "💥误伤", tlMaleNote: "事故之年", tlDouble: "一发双中"
+    },
+    off: {
+      docTitle: "多伦多炮王",
+      title: "多伦多炮王",
+      sub: "登塔播种十年 · 一炮一个传说",
+      legend: [
+        "<b>按住拖拽</b> 瞄准蓄力,松手开炮",
+        "命中<b>女英雄</b> = 收获代目 + 回 1 发弹药",
+        "命中<b>男英雄</b> = 当场塌房",
+        "空炮 = 白白浪费"
+      ],
+      collectToast: function (c) {
+        return Sim.cnNum(c.gen) + "代目 · " + c.name + (c.repeat ? "(复合!)" : "");
+      },
+      maleToast: function (n) { return "寄!打中兄弟了 · " + n; },
+      missLines: ["空炮!这一发喂了海鸥", "空炮!打中了安大略湖", "空炮!市政厅表示强烈谴责", "空炮!风太大了", "空炮!纯属练枪法"],
+      verdictBust: "塌 房", verdictDry: "弹尽粮绝",
+      badgeLabel: "获得称号:",
+      titles: [[0, "纯爱战神 · 十年颗粒无收"], [1, "见习炮手"], [4, "情场老兵 · 炮火连天"], [7, "战功赫赫 · 名动北美"], [10, "一代炮王 · 多伦多传奇"], [13, "炮王中的炮王 · 永动机"]],
+      detailBust: function (n, y, hero, shots) {
+        return shots + " 发种子换来 " + n + " 位代目。" + y + " 年,最后一发不慎播到了兄弟 <b>" + hero +
+          "</b> 身上——#多伦多炮王走火# 连夜冲上热搜第一,DNA 报告还没出,炮王先社死了。十年基业,一炮回到解放前。";
+      },
+      detailDry: function (n, y, shots) {
+        return shots + " 发种子播遍多伦多,颗粒归仓 <b>" + n + "</b> 位代目,子嗣数量至今成谜。" + y +
+          " 年,最后一发落入安大略湖,湖里的鱼从此都很紧张。炮王金盆洗手,深藏功与名,只留下满城风雨和一座弹壳纪念碑。";
+      },
+      tlTitle: function (y0, y1, overtime) { return "—— 多伦多炮王编年史 " + y0 + "–" + y1 + (overtime ? "(超期服役)" : "") + " ——"; },
+      tlGen: function (c) { return Sim.cnNum(c.gen) + "代目" + (c.repeat ? "(复合)" : ""); },
+      tlMale: "💥兄弟", tlMaleNote: "塌房元年", tlDouble: "一炮双响"
+    }
+  };
+  function theme() { return filterOn ? TH.on : TH.off; }
+
+  /* cognitive filter: on = lava ball + training story, off = the unfiltered truth */
   var filterOn = localStorage.getItem("snapfire_filter") !== "off";
+  var started = false;
   var toggleEl = document.getElementById("filterToggle");
   var toggleState = document.getElementById("filterState");
+  var legendEl = document.getElementById("legend");
+  var mainTitle = document.getElementById("mainTitle");
+  var mainSub = document.getElementById("mainSub");
+  var startOverlay = document.getElementById("startOverlay");
+
   function renderToggle() {
     toggleEl.classList.toggle("on", filterOn);
     toggleEl.classList.toggle("off", !filterOn);
     toggleState.textContent = filterOn ? "开" : "关";
   }
+  function applyTheme() {
+    var T = theme();
+    document.title = T.docTitle;
+    mainTitle.textContent = T.title;
+    mainSub.textContent = T.sub;
+    legendEl.innerHTML = "";
+    for (var k = 0; k < T.legend.length; k++) {
+      var sp = document.createElement("span");
+      sp.innerHTML = T.legend[k];
+      legendEl.appendChild(sp);
+    }
+    renderToggle();
+    if (gameOverShown) renderEnd();
+  }
   toggleEl.addEventListener("click", function () {
     filterOn = !filterOn;
     localStorage.setItem("snapfire_filter", filterOn ? "on" : "off");
-    renderToggle();
+    applyTheme();
   });
-  renderToggle();
+  document.getElementById("optOn").addEventListener("click", function () { enter(true); });
+  document.getElementById("optOff").addEventListener("click", function () { enter(false); });
+  function enter(withFilter) {
+    filterOn = withFilter;
+    localStorage.setItem("snapfire_filter", filterOn ? "on" : "off");
+    applyTheme();
+    startOverlay.classList.remove("show");
+    started = true;
+  }
   function ballImg() { return filterOn ? IMG.ball_lava : IMG.ball_milk; }
+  applyTheme();
   var active = null;        // shot in flight {s, t0}
   var aim = null;           // {sx, sy, vx, vy, preview}
   var fx = [];
@@ -337,6 +475,8 @@
     overlay.classList.remove("show");
     var ts = wrap.querySelectorAll(".toast");
     for (k = 0; k < ts.length; k++) ts[k].remove();
+    started = false;
+    startOverlay.classList.add("show");
   }
 
   /* ---------- input: slingshot drag ---------- */
@@ -345,7 +485,7 @@
     return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
   }
   canvas.addEventListener("pointerdown", function (e) {
-    if (state.over || state.inFlight || state.ammo <= 0) return;
+    if (!started || state.over || state.inFlight || state.ammo <= 0) return;
     canvas.setPointerCapture(e.pointerId);
     var p = evPos(e);
     aim = { sx: p.x, sy: p.y, vx: 0, vy: 0, ok: false, preview: null };
@@ -385,14 +525,13 @@
   }
 
   /* ---------- shot resolution & event choreography ---------- */
-  var MISS_LINES = ["空炮！这一发喂了海鸥", "空炮！打中了安大略湖", "空炮！市政厅表示强烈谴责", "空炮！风太大了", "空炮！纯属练枪法"];
-
   function settle(s) {
     var evs = Sim.resolve(state, s);
     var delay = 0;
     var entry = state.log[state.log.length - 1];
     if (entry.result === "miss" || entry.result === "lost") {
-      toast(MISS_LINES[(s.shotIndex - 1) % MISS_LINES.length], "info");
+      var ml = theme().missLines;
+      toast(ml[(s.shotIndex - 1) % ml.length], "info");
     }
     for (var k = 0; k < evs.length; k++) {
       (function (ev, d) {
@@ -400,7 +539,7 @@
           later(function () {
             var u = ev.unit, c = ev.col;
             burst(u.x0 + u.w / 2, u.y0 + u.h / 2, "heart");
-            toast(Sim.cnNum(c.gen) + "代目 · " + c.name + (c.repeat ? "(复合!)" : ""), "");
+            toast(theme().collectToast(c), "");
             fx.push({ kind: "fly", key: c.key, gen: c.gen,
               x0: u.x0 + u.w / 2, y0: u.y0 + u.h / 2,
               x1: W - 40, y1: stackY(c.gen), t0: now(), dur: 0.7 });
@@ -410,7 +549,7 @@
             var u = ev.unit;
             burst(u.x0 + u.w / 2, u.y0 + u.h / 2, "skull");
             flashUntil = now() + 0.5; flashColor = "255,90,78";
-            toast("寄！打中兄弟了 · " + ev.unit.name, "male");
+            toast(theme().maleToast(ev.unit.name), "male");
           }, d);
         } else if (ev.type === "end") {
           later(function () { showEnd(ev.reason); }, d + (ev.reason === "bust" ? 1500 : 1100));
@@ -441,39 +580,35 @@
   }
 
   /* ---------- settlement overlay ---------- */
-  var TITLES = [
-    [0, "纯爱战神 · 十年颗粒无收"],
-    [1, "见习炮手"],
-    [4, "情场老兵 · 炮火连天"],
-    [7, "战功赫赫 · 名动北美"],
-    [10, "一代炮王 · 多伦多传奇"],
-    [13, "炮王中的炮王 · 永动机"]
-  ];
   function titleFor(n) {
-    var t = TITLES[0][1];
-    for (var k = 0; k < TITLES.length; k++) if (n >= TITLES[k][0]) t = TITLES[k][1];
+    var list = theme().titles, t = list[0][1];
+    for (var k = 0; k < list.length; k++) if (n >= list[k][0]) t = list[k][1];
     return t;
   }
   var TL_MISS = ["哑炮", "喂了海鸥", "在打灰", "练枪法", "风太大"];
+  var lastEnd = null;
 
   function showEnd(reason) {
     if (gameOverShown) return;
     gameOverShown = true;
+    lastEnd = reason;
+    renderEnd();
+    overlay.classList.add("show");
+  }
+
+  function renderEnd() {
+    var T = theme();
+    var reason = lastEnd;
     var n = state.collections.length;
     var lastYear = Sim.START_YEAR + state.shot - 1;
-    verdictEl.textContent = reason === "bust" ? "塌 房" : "弹尽粮绝";
+    verdictEl.textContent = reason === "bust" ? T.verdictBust : T.verdictDry;
     verdictEl.className = "verdict " + reason;
-    badgeEl.textContent = "获得称号:" + titleFor(n);
-    if (reason === "bust") {
-      detailEl.innerHTML = state.shot + " 发炮弹换来 " + n + " 位代目。" + lastYear +
-        " 年,一炮打在了 <b>" + state.endHero.name + "</b> 身上——多伦多警方连夜把加农炮吊下了 CN Tower,炮王生涯就此终结。";
-    } else {
-      detailEl.innerHTML = state.shot + " 发炮弹打完,收获 <b>" + n + "</b> 位代目。" + lastYear +
-        " 年,最后一发落进安大略湖,炮王宣布退役,深藏功与名。";
-    }
+    badgeEl.textContent = T.badgeLabel + titleFor(n);
+    detailEl.innerHTML = reason === "bust"
+      ? T.detailBust(n, lastYear, state.endHero.name, state.shot)
+      : T.detailDry(n, lastYear, state.shot);
 
-    tlTitleEl.textContent = "—— 多伦多炮王编年史 " + Sim.START_YEAR + "–" + Math.max(2026, lastYear) +
-      (lastYear > 2026 ? "(超期服役)" : "") + " ——";
+    tlTitleEl.textContent = T.tlTitle(Sim.START_YEAR, Math.max(2026, lastYear), lastYear > 2026);
     tlEl.innerHTML = "";
     for (var k = 0; k < state.log.length; k++) {
       var e = state.log[k];
@@ -482,13 +617,11 @@
       var stack = document.createElement("div");
       stack.className = "tl-stack";
       if (e.result === "male") {
-        stack.appendChild(tlItem(e.maleKey, "💥兄弟", e.maleName, "male", k));
+        stack.appendChild(tlItem(e.maleKey, T.tlMale, e.maleName, "male", k));
       } else {
         for (var g = 0; g < e.gens.length; g++) {
           var c = state.collections[e.gens[g] - 1];
-          stack.appendChild(tlItem(c.key,
-            Sim.cnNum(c.gen) + "代目" + (c.repeat ? "(复合)" : ""),
-            c.name, c.repeat ? "repeat" : "", k + g));
+          stack.appendChild(tlItem(c.key, T.tlGen(c), c.name, c.repeat ? "repeat" : "", k + g));
         }
       }
       col.appendChild(stack);
@@ -504,12 +637,11 @@
       col.appendChild(yr);
       var note = document.createElement("div");
       note.className = "tl-note";
-      note.textContent = e.result === "male" ? "塌房元年"
-        : e.gens.length ? (e.gens.length > 1 ? "一炮双响" : "") : TL_MISS[e.shot % TL_MISS.length];
+      note.textContent = e.result === "male" ? T.tlMaleNote
+        : e.gens.length ? (e.gens.length > 1 ? T.tlDouble : "") : TL_MISS[e.shot % TL_MISS.length];
       col.appendChild(note);
       tlEl.appendChild(col);
     }
-    overlay.classList.add("show");
   }
 
   function tlItem(key, line1, line2, cls, idx) {
