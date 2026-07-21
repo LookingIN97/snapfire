@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多伦多炮王 · Snapfire</title>
+<meta name="description" content="DOTA2 同人小游戏:Snapfire 驻守多伦多 CN Tower 十年,一门加农炮,十发炮弹。命中女英雄收获代目,命中男英雄当场塌房。">
+<style>
+  :root {
+    --bg: #0c0a18;
+    --panel: #1c1430;
+    --line: #4a3a78;
+    --gold: #f0c95c;
+    --pink: #ff7ab8;
+    --red: #ff5a4e;
+    --green: #7ee08a;
+    --text: #efe9ff;
+    --dim: #9a8fc0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background:
+      radial-gradient(ellipse 90% 50% at 50% -5%, rgba(255, 122, 184, .10), transparent 60%),
+      linear-gradient(180deg, #0c0a18 0%, #171029 55%, #0c0a18 100%);
+    color: var(--text);
+    font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  header { text-align: center; padding: clamp(14px, 2.6vh, 28px) 12px 4px; }
+  h1 {
+    font-size: clamp(1.7rem, 6vw, 2.8rem);
+    letter-spacing: .18em;
+    text-indent: .18em;
+    color: var(--gold);
+    text-shadow: 3px 3px 0 #7a4b12, 6px 6px 0 rgba(0,0,0,.45);
+  }
+  .sub { margin-top: 8px; color: var(--dim); font-size: clamp(.72rem, 2.4vw, .9rem); letter-spacing: .34em; text-indent: .34em; }
+
+  .arena-wrap {
+    position: relative;
+    width: min(97vw, 1240px);
+    margin-top: 14px;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 3px solid var(--line);
+    border-radius: 4px;
+    box-shadow: 0 0 0 3px #120d22, 0 20px 60px rgba(0, 0, 0, .55);
+    background: #171029;
+    touch-action: none;
+    cursor: crosshair;
+  }
+
+  /* toast banners: 「X代目 · 名字」 */
+  .toast {
+    position: absolute;
+    left: 50%;
+    top: 13%;
+    transform: translateX(-50%);
+    padding: 10px 22px;
+    background: rgba(14, 9, 26, .92);
+    border: 3px solid var(--gold);
+    box-shadow: 4px 4px 0 rgba(0,0,0,.5);
+    color: var(--gold);
+    font-weight: 800;
+    font-size: clamp(1rem, 3.4vw, 1.5rem);
+    letter-spacing: .12em;
+    white-space: nowrap;
+    pointer-events: none;
+    animation: toast 2.2s steps(12) both;
+    z-index: 5;
+  }
+  .toast.male { border-color: var(--red); color: var(--red); }
+  .toast.info { border-color: var(--dim); color: var(--dim); font-size: clamp(.8rem, 2.6vw, 1rem); }
+  @keyframes toast {
+    0% { transform: translateX(-50%) scale(0); opacity: 0; }
+    10% { transform: translateX(-50%) scale(1.15); opacity: 1; }
+    16% { transform: translateX(-50%) scale(1); }
+    80% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  /* settlement overlay */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 18px 10px;
+    background: rgba(8, 5, 16, .88);
+    z-index: 10;
+    overflow-y: auto;
+  }
+  .overlay.show { display: flex; }
+  .verdict {
+    font-size: clamp(1.8rem, 7vw, 3rem);
+    font-weight: 900;
+    letter-spacing: .3em;
+    text-indent: .3em;
+  }
+  .verdict.bust { color: var(--red); text-shadow: 0 0 34px rgba(255, 90, 78, .6); }
+  .verdict.dry { color: var(--gold); text-shadow: 0 0 34px rgba(240, 201, 92, .55); }
+  .badge {
+    padding: 6px 18px;
+    border: 3px solid var(--pink);
+    color: var(--pink);
+    font-weight: 800;
+    letter-spacing: .2em;
+    text-indent: .2em;
+    box-shadow: 4px 4px 0 rgba(0,0,0,.5);
+    font-size: clamp(.9rem, 3vw, 1.15rem);
+  }
+  .detail { color: var(--dim); font-size: clamp(.78rem, 2.5vw, .95rem); text-align: center; max-width: 86%; line-height: 1.8; }
+
+  .tl-wrap {
+    max-width: 94%;
+    overflow-x: auto;
+    padding: 6px 4px 2px;
+    border: 2px dashed rgba(240, 201, 92, .4);
+  }
+  .tl-title { color: var(--gold); font-size: .85rem; letter-spacing: .25em; text-indent: .25em; }
+  .tl { display: flex; align-items: flex-end; gap: 4px; padding: 8px 10px 4px; }
+  .tl-col { display: flex; flex-direction: column; align-items: center; min-width: 64px; }
+  .tl-stack { display: flex; flex-direction: column-reverse; align-items: center; gap: 3px; }
+  .tl-item { display: flex; flex-direction: column; align-items: center; animation: rise .4s cubic-bezier(.2,1.5,.4,1) both; }
+  .tl-item .frame {
+    width: 46px; height: 52px;
+    display: flex; align-items: flex-end; justify-content: center;
+    background: #221741;
+    border: 2px solid var(--gold);
+    box-shadow: 3px 3px 0 rgba(0,0,0,.45);
+    overflow: hidden;
+  }
+  .tl-item.repeat .frame { border-color: var(--pink); }
+  .tl-item.male .frame { border-color: var(--red); background: #3a1020; }
+  .tl-item img { height: 48px; image-rendering: pixelated; }
+  .tl-item .tag { font-size: .6rem; color: var(--gold); margin-top: 2px; white-space: nowrap; text-align: center; line-height: 1.35; }
+  .tl-item.repeat .tag { color: var(--pink); }
+  .tl-item.male .tag { color: var(--red); }
+  @keyframes rise { from { transform: translateY(14px) scale(0); opacity: 0; } to { transform: none; opacity: 1; } }
+  .tl-axis { width: 100%; height: 12px; display: flex; align-items: center; justify-content: center; position: relative; margin-top: 4px; }
+  .tl-axis::before { content: ""; position: absolute; left: -2px; right: -2px; top: 5px; height: 2px; background: var(--line); }
+  .tl-dot { width: 10px; height: 10px; background: var(--gold); border: 2px solid #120d22; position: relative; }
+  .tl-col.miss .tl-dot { background: #3a3158; }
+  .tl-col.male .tl-dot { background: var(--red); }
+  .tl-year { margin-top: 3px; font-size: .68rem; color: var(--text); font-weight: 700; }
+  .tl-note { font-size: .6rem; color: var(--dim); margin-top: 1px; white-space: nowrap; }
+
+  .btn {
+    font-family: inherit;
+    font-size: 1.02rem;
+    font-weight: 800;
+    letter-spacing: .28em;
+    text-indent: .28em;
+    color: #1b1030;
+    background: var(--gold);
+    border: 3px solid #7a4b12;
+    box-shadow: 4px 4px 0 rgba(0,0,0,.5);
+    padding: 10px 30px;
+    cursor: pointer;
+    transition: transform .08s, filter .12s;
+  }
+  .btn:hover { filter: brightness(1.1); }
+  .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 rgba(0,0,0,.5); }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px 18px;
+    padding: 12px 14px 4px;
+    color: var(--dim);
+    font-size: .8rem;
+  }
+  .legend b { color: var(--text); font-weight: 600; }
+  footer {
+    padding: 10px 16px 22px;
+    font-size: .7rem;
+    color: rgba(154, 143, 192, .55);
+    text-align: center;
+    line-height: 1.8;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>多伦多炮王</h1>
+  <div class="sub">SNAPFIRE 驻 CN TOWER 十年实录</div>
+</header>
+
+<div class="arena-wrap" id="wrap">
+  <canvas id="arena" width="1800" height="720"></canvas>
+  <div class="overlay" id="overlay">
+    <div class="verdict" id="verdict"></div>
+    <div class="badge" id="badge"></div>
+    <div class="detail" id="detail"></div>
+    <div class="tl-title" id="tlTitle">—— 多伦多炮王编年史 ——</div>
+    <div class="tl-wrap"><div class="tl" id="tl"></div></div>
+    <button class="btn" id="againBtn" type="button">再 来 十 年</button>
+  </div>
+</div>
+
+<div class="legend">
+  <span><b>按住拖拽</b> 瞄准蓄力,松手开炮</span>
+  <span>命中<b>女英雄</b> = 收获代目 + 回 1 发弹药</span>
+  <span>命中<b>男英雄</b> = 当场塌房</span>
+  <span>空炮 = 白白浪费</span>
+</div>
+
+<footer>
+  非商业同人作品 · Dota 2 与 Snapfire 及相关英雄版权归 Valve Corporation 所有<br>
+  多伦多天际线仅作像素演绎 · CN Tower 上并没有加农炮
+</footer>
+
+<script src="game.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var Sim = window.SnapSim;
+  var canvas = document.getElementById("arena");
+  var ctx = canvas.getContext("2d");
+  var wrap = document.getElementById("wrap");
+  var overlay = document.getElementById("overlay");
+  var verdictEl = document.getElementById("verdict");
+  var badgeEl = document.getElementById("badge");
+  var detailEl = document.getElementById("detail");
+  var tlEl = document.getElementById("tl");
+  var tlTitleEl = document.getElementById("tlTitle");
+  document.getElementById("againBtn").addEventListener("click", restart);
+
+  var W = Sim.W, H = Sim.H, GROUND = Sim.GROUND;
+
+  /* ---------- assets ---------- */
+  var IMG_KEYS = ["sky", "tower", "cannon", "snapfire", "ball",
+    "rogers", "cityhall", "condo", "brick", "ocad", "flatiron", "rom", "sign"];
+  var i;
+  for (i = 0; i < Sim.HEROES.length; i++) IMG_KEYS.push(Sim.HEROES[i].key);
+  var IMG = {};
+  var pending = IMG_KEYS.length;
+  IMG_KEYS.forEach(function (k) {
+    var im = new Image();
+    im.onload = im.onerror = function () { pending--; };
+    im.src = "assets/" + k + ".png";
+    IMG[k] = im;
+  });
+
+  /* ---------- state ---------- */
+  var SEED = (function () {
+    var m = /[?&]seed=(\d+)/.exec(location.search);
+    return m ? parseInt(m[1], 10) : null;
+  })();
+  var state = Sim.createGame(SEED);
+  var active = null;        // shot in flight {s, t0}
+  var aim = null;           // {sx, sy, vx, vy, preview}
+  var fx = [];
+  var landed = {};          // gen -> true, portrait reached the stack
+  var timeouts = [];
+  var gameOverShown = false;
+  var flashUntil = 0, flashColor = "255,90,78";
+  var VK = 3.1;             // drag px -> velocity
+
+  function now() { return performance.now() / 1000; }
+
+  function later(fn, ms) { timeouts.push(setTimeout(fn, ms)); }
+
+  function restart() {
+    for (var k = 0; k < timeouts.length; k++) clearTimeout(timeouts[k]);
+    timeouts = [];
+    state = Sim.createGame(SEED == null ? null : SEED + 1);
+    active = null; aim = null; fx = []; landed = {}; gameOverShown = false;
+    overlay.classList.remove("show");
+    var ts = wrap.querySelectorAll(".toast");
+    for (k = 0; k < ts.length; k++) ts[k].remove();
+  }
+
+  /* ---------- input: slingshot drag ---------- */
+  function evPos(e) {
+    var r = canvas.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
+  }
+  canvas.addEventListener("pointerdown", function (e) {
+    if (state.over || state.inFlight || state.ammo <= 0) return;
+    canvas.setPointerCapture(e.pointerId);
+    var p = evPos(e);
+    aim = { sx: p.x, sy: p.y, vx: 0, vy: 0, ok: false, preview: null };
+    e.preventDefault();
+  });
+  canvas.addEventListener("pointermove", function (e) {
+    if (!aim) return;
+    var p = evPos(e);
+    var dx = aim.sx - p.x, dy = aim.sy - p.y;
+    var d = Math.sqrt(dx * dx + dy * dy);
+    aim.ok = d > 26;
+    if (!aim.ok) { aim.preview = null; return; }
+    var v = d * VK;
+    v = Math.max(Sim.POWER_MIN, Math.min(Sim.POWER_MAX, v));
+    aim.vx = dx / d * v;
+    aim.vy = dy / d * v;
+    aim.preview = Sim.computeShot(state, aim.vx, aim.vy);
+  });
+  function endAim(e) {
+    if (!aim) return;
+    var a = aim;
+    aim = null;
+    if (!a.ok || state.over || state.inFlight) return;
+    var s = Sim.fire(state, a.vx, a.vy);
+    if (s) active = { s: s, t0: now() };
+  }
+  canvas.addEventListener("pointerup", endAim);
+  canvas.addEventListener("pointercancel", function () { aim = null; });
+
+  /* ---------- toast ---------- */
+  function toast(text, cls) {
+    var el = document.createElement("div");
+    el.className = "toast" + (cls ? " " + cls : "");
+    el.textContent = text;
+    wrap.appendChild(el);
+    el.addEventListener("animationend", function () { el.remove(); });
+  }
+
+  /* ---------- shot resolution & event choreography ---------- */
+  var MISS_LINES = ["空炮！这一发喂了海鸥", "空炮！打中了安大略湖", "空炮！市政厅表示强烈谴责", "空炮！风太大了", "空炮！纯属练枪法"];
+
+  function settle(s) {
+    var evs = Sim.resolve(state, s);
+    var delay = 0;
+    var entry = state.log[state.log.length - 1];
+    if (entry.result === "miss" || entry.result === "lost") {
+      toast(MISS_LINES[(s.shotIndex - 1) % MISS_LINES.length], "info");
+    }
+    for (var k = 0; k < evs.length; k++) {
+      (function (ev, d) {
+        if (ev.type === "collect") {
+          later(function () {
+            var u = ev.unit, c = ev.col;
+            burst(u.x0 + u.w / 2, u.y0 + u.h / 2, "heart");
+            toast(Sim.cnNum(c.gen) + "代目 · " + c.name + (c.repeat ? "(复合!)" : ""), "");
+            fx.push({ kind: "fly", key: c.key, gen: c.gen,
+              x0: u.x0 + u.w / 2, y0: u.y0 + u.h / 2,
+              x1: W - 40, y1: stackY(c.gen), t0: now(), dur: 0.7 });
+          }, d);
+        } else if (ev.type === "male") {
+          later(function () {
+            var u = ev.unit;
+            burst(u.x0 + u.w / 2, u.y0 + u.h / 2, "skull");
+            flashUntil = now() + 0.5; flashColor = "255,90,78";
+            toast("寄！打中兄弟了 · " + ev.unit.name, "male");
+          }, d);
+        } else if (ev.type === "end") {
+          later(function () { showEnd(ev.reason); }, d + (ev.reason === "bust" ? 1500 : 1100));
+        }
+        // spawns pop in silently after the dust settles
+        if (ev.type === "spawn") ev.unit.bornAt = now() + 0.8;
+      })(evs[k], delay);
+      if (evs[k].type === "collect") delay += 500;
+    }
+  }
+
+  /* ---------- fx ---------- */
+  function burst(x, y, kind) {
+    fx.push({ kind: "ring", x: x, y: y, r: Sim.SPLASH, t0: now(), dur: 0.55 });
+    fx.push({ kind: "shake", t0: now(), dur: 0.4 });
+    for (var k = 0; k < 12; k++) {
+      var a = Math.random() * Math.PI * 2, sp = 60 + Math.random() * 160;
+      fx.push({ kind: kind === "heart" ? "p-heart" : kind === "skull" ? "p-skull" : "p-spark",
+        x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 80,
+        t0: now(), dur: 0.6 + Math.random() * 0.5 });
+    }
+  }
+
+  function stackY(gen) {
+    var n = Math.max(state.collections.length, gen);
+    var sp = Math.min(48, (GROUND - 90) / Math.max(n, 1));
+    return 46 + (gen - 0.5) * sp;
+  }
+
+  /* ---------- settlement overlay ---------- */
+  var TITLES = [
+    [0, "纯爱战神 · 十年颗粒无收"],
+    [1, "见习炮手"],
+    [4, "情场老兵 · 炮火连天"],
+    [7, "战功赫赫 · 名动北美"],
+    [10, "一代炮王 · 多伦多传奇"],
+    [13, "炮王中的炮王 · 永动机"]
+  ];
+  function titleFor(n) {
+    var t = TITLES[0][1];
+    for (var k = 0; k < TITLES.length; k++) if (n >= TITLES[k][0]) t = TITLES[k][1];
+    return t;
+  }
+  var TL_MISS = ["哑炮", "喂了海鸥", "在打灰", "练枪法", "风太大"];
+
+  function showEnd(reason) {
+    if (gameOverShown) return;
+    gameOverShown = true;
+    var n = state.collections.length;
+    var lastYear = Sim.START_YEAR + state.shot - 1;
+    verdictEl.textContent = reason === "bust" ? "塌 房" : "弹尽粮绝";
+    verdictEl.className = "verdict " + reason;
+    badgeEl.textContent = "获得称号:" + titleFor(n);
+    if (reason === "bust") {
+      detailEl.innerHTML = state.shot + " 发炮弹换来 " + n + " 位代目。" + lastYear +
+        " 年,一炮打在了 <b>" + state.endHero.name + "</b> 身上——多伦多警方连夜把加农炮吊下了 CN Tower,炮王生涯就此终结。";
+    } else {
+      detailEl.innerHTML = state.shot + " 发炮弹打完,收获 <b>" + n + "</b> 位代目。" + lastYear +
+        " 年,最后一发落进安大略湖,炮王宣布退役,深藏功与名。";
+    }
+
+    tlTitleEl.textContent = "—— 多伦多炮王编年史 " + Sim.START_YEAR + "–" + Math.max(2026, lastYear) +
+      (lastYear > 2026 ? "(超期服役)" : "") + " ——";
+    tlEl.innerHTML = "";
+    for (var k = 0; k < state.log.length; k++) {
+      var e = state.log[k];
+      var col = document.createElement("div");
+      col.className = "tl-col" + (e.result === "male" ? " male" : (e.gens.length ? "" : " miss"));
+      var stack = document.createElement("div");
+      stack.className = "tl-stack";
+      if (e.result === "male") {
+        stack.appendChild(tlItem(e.maleKey, "💥兄弟", e.maleName, "male", k));
+      } else {
+        for (var g = 0; g < e.gens.length; g++) {
+          var c = state.collections[e.gens[g] - 1];
+          stack.appendChild(tlItem(c.key,
+            Sim.cnNum(c.gen) + "代目" + (c.repeat ? "(复合)" : ""),
+            c.name, c.repeat ? "repeat" : "", k + g));
+        }
+      }
+      col.appendChild(stack);
+      var axis = document.createElement("div");
+      axis.className = "tl-axis";
+      var dot = document.createElement("div");
+      dot.className = "tl-dot";
+      axis.appendChild(dot);
+      col.appendChild(axis);
+      var yr = document.createElement("div");
+      yr.className = "tl-year";
+      yr.textContent = e.year;
+      col.appendChild(yr);
+      var note = document.createElement("div");
+      note.className = "tl-note";
+      note.textContent = e.result === "male" ? "塌房元年"
+        : e.gens.length ? (e.gens.length > 1 ? "一炮双响" : "") : TL_MISS[e.shot % TL_MISS.length];
+      col.appendChild(note);
+      tlEl.appendChild(col);
+    }
+    overlay.classList.add("show");
+  }
+
+  function tlItem(key, line1, line2, cls, idx) {
+    var it = document.createElement("div");
+    it.className = "tl-item" + (cls ? " " + cls : "");
+    it.style.animationDelay = (idx * 70) + "ms";
+    var f = document.createElement("div");
+    f.className = "frame";
+    var im = document.createElement("img");
+    im.src = "assets/" + key + ".png";
+    im.alt = line1 + " " + line2;
+    f.appendChild(im);
+    it.appendChild(f);
+    var t = document.createElement("div");
+    t.className = "tag";
+    t.appendChild(document.createTextNode(line1));
+    t.appendChild(document.createElement("br"));
+    t.appendChild(document.createTextNode(line2));
+    it.appendChild(t);
+    return it;
+  }
+
+  /* ---------- drawing ---------- */
+  var FAR = (function () {           // fixed distant skyline for depth
+    var arr = [], x = 30, rng = 7;
+    while (x < W - 40) {
+      var w = 40 + ((x * 137) % 90), h = 60 + ((x * 61) % 170);
+      arr.push({ x: x, w: w, h: h });
+      x += w + 14 + ((x * 31) % 40);
+    }
+    return arr;
+  })();
+
+  function drawScene(t) {
+    ctx.drawImage(IMG.sky, 0, 0, W, H);
+
+    // far skyline
+    for (var k = 0; k < FAR.length; k++) {
+      var b = FAR[k];
+      ctx.fillStyle = "rgba(38, 26, 66, .85)";
+      ctx.fillRect(b.x, GROUND - b.h - 24, b.w, b.h + 24);
+      ctx.fillStyle = "rgba(240, 201, 92, .12)";
+      for (var wy = GROUND - b.h - 12; wy < GROUND - 8; wy += 18) {
+        for (var wx = b.x + 6; wx < b.x + b.w - 6; wx += 16) {
+          if (((wx * 7 + wy * 13) % 5) < 2) ctx.fillRect(wx, wy, 4, 6);
+        }
+      }
+    }
+
+    // street
+    ctx.fillStyle = "#191327";
+    ctx.fillRect(0, GROUND, W, H - GROUND);
+    ctx.fillStyle = "#241b38";
+    ctx.fillRect(0, GROUND, W, 4);
+    ctx.fillStyle = "rgba(240,201,92,.25)";
+    for (var sx = 20; sx < W; sx += 90) ctx.fillRect(sx, GROUND + 14, 34, 4);
+
+    // landmarks
+    for (k = 0; k < Sim.BUILDINGS.length; k++) {
+      var bd = Sim.BUILDINGS[k];
+      ctx.drawImage(IMG[bd.key], bd.x, GROUND - bd.h, bd.w, bd.h);
+    }
+
+    // CN tower + crew
+    var th = 700, tw = 164 * th / 1000;
+    ctx.drawImage(IMG.tower, 128 - tw / 2, GROUND - th, tw, th);
+    var sf = IMG.snapfire, sfh = 54, sfw = sf.width * sfh / sf.height;
+    ctx.drawImage(sf, 104 - sfw / 2, 302 - sfh, sfw, sfh);
+  }
+
+  function drawCannon(t) {
+    var ang = Math.PI / 4;
+    if (aim && aim.ok) ang = Math.atan2(-aim.vy, aim.vx);
+    else if (active) ang = Math.atan2(-active.s.vy, active.s.vx);
+    var recoil = 0;
+    if (active) {
+      var rt = (t - active.t0) / 0.25;
+      if (rt < 1) recoil = 8 * (1 - rt);
+    }
+    var img = IMG.cannon, ch = 58, cw = img.width * ch / img.height;
+    ctx.save();
+    ctx.translate(Sim.MUZZLE.x, Sim.MUZZLE.y);
+    ctx.rotate(Math.PI / 4 - ang);
+    ctx.translate(-recoil, 0);
+    ctx.drawImage(img, -cw * 0.42, -ch * 0.72, cw, ch);
+    ctx.restore();
+  }
+
+  function drawHeroes(t) {
+    for (var k = 0; k < state.field.length; k++) {
+      var u = state.field[k];
+      if (u.bornAt && t < u.bornAt) continue;
+      var grow = u.bornAt ? Math.min(1, (t - u.bornAt) / 0.3) : 1;
+      var bob = Math.sin(t * 2 + u.phase) * 3;
+      var img = IMG[u.key];
+      var w = u.w * grow, h = u.h * grow;
+      ctx.drawImage(img, u.x0 + (u.w - w) / 2, u.y0 + u.h - h + bob, w, h);
+    }
+  }
+
+  function drawAmmo() {
+    var n = state.ammo;
+    ctx.font = "bold 15px 'Courier New', monospace";
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(239,233,255,.8)";
+    ctx.fillText("弹药 ×" + n, 14, GROUND - Math.ceil(n / 2) * 21 - 12);
+    for (var k = 0; k < n; k++) {
+      var col = k % 2, row = (k / 2) | 0;
+      ctx.drawImage(IMG.ball, 14 + col * 22, GROUND - 24 - row * 21, 20, 20);
+    }
+  }
+
+  function drawStack(t) {
+    var n = state.collections.length;
+    if (!n) return;
+    ctx.font = "bold 14px 'Courier New', monospace";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(240,201,92,.9)";
+    ctx.fillText("代目 ×" + n, W - 40, 26);
+    for (var k = 0; k < n; k++) {
+      var c = state.collections[k];
+      if (!landed[c.gen]) continue;
+      var y = stackY(c.gen);
+      var img = IMG[c.key];
+      var h = 40, w = Math.min(34, img.width * h / img.height);
+      ctx.fillStyle = "#221741";
+      ctx.fillRect(W - 62, y - 22, 44, 44);
+      ctx.strokeStyle = c.repeat ? "#ff7ab8" : "#f0c95c";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(W - 62, y - 22, 44, 44);
+      ctx.drawImage(img, W - 40 - w / 2, y + 20 - h, w, h);
+      ctx.fillStyle = "#f0c95c";
+      ctx.font = "bold 11px 'Courier New', monospace";
+      ctx.fillText(c.gen, W - 56, y + 17);
+      ctx.font = "bold 14px 'Courier New', monospace";
+    }
+  }
+
+  function drawPreview() {
+    if (!aim || !aim.ok || !aim.preview) return;
+    var p = aim.preview;
+    ctx.strokeStyle = "rgba(240, 201, 92, .85)";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 10]);
+    ctx.beginPath();
+    for (var k = 0; k < p.path.length; k++) {
+      var pt = p.path[k];
+      if (k === 0) ctx.moveTo(pt.x, pt.y);
+      else ctx.lineTo(pt.x, pt.y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (p.impact) {
+      ctx.beginPath();
+      ctx.arc(p.impact.x, p.impact.y, Sim.SPLASH, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255, 122, 184, .16)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255, 122, 184, .8)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(p.impact.x, p.impact.y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ff7ab8";
+      ctx.fill();
+    }
+    // power bar by the cannon
+    var pw = Math.sqrt(aim.vx * aim.vx + aim.vy * aim.vy);
+    var frac = (pw - Sim.POWER_MIN) / (Sim.POWER_MAX - Sim.POWER_MIN);
+    ctx.fillStyle = "rgba(0,0,0,.55)";
+    ctx.fillRect(Sim.MUZZLE.x - 30, Sim.MUZZLE.y - 64, 60, 10);
+    ctx.fillStyle = frac > 0.85 ? "#ff5a4e" : "#7ee08a";
+    ctx.fillRect(Sim.MUZZLE.x - 28, Sim.MUZZLE.y - 62, 56 * frac, 6);
+  }
+
+  function drawBall(t) {
+    if (!active) return;
+    var s = active.s;
+    var tt = (t - active.t0) * 1.45;
+    if (tt >= s.flightT) {
+      if (s.impact) burst(s.impact.x, s.impact.y, s.females.length ? "heart" : (s.males.length ? "skull" : "spark"));
+      var done = active.s;
+      active = null;
+      settle(done);
+      return;
+    }
+    var path = s.path;
+    var idx = 1;
+    while (idx < path.length && path[idx].t < tt) idx++;
+    var a = path[Math.max(0, idx - 1)], b = path[Math.min(idx, path.length - 1)];
+    var f = (b.t === a.t) ? 0 : (tt - a.t) / (b.t - a.t);
+    var x = a.x + (b.x - a.x) * f, y = a.y + (b.y - a.y) * f;
+    for (var k = 1; k <= 3; k++) {
+      var pi = Math.max(0, idx - 1 - k * 3);
+      ctx.globalAlpha = 0.25 - k * 0.06;
+      ctx.drawImage(IMG.ball, path[pi].x - 8, path[pi].y - 8, 16, 16);
+    }
+    ctx.globalAlpha = 1;
+    ctx.drawImage(IMG.ball, x - Sim.BALL_R, y - Sim.BALL_R, Sim.BALL_R * 2, Sim.BALL_R * 2);
+  }
+
+  function drawFx(t) {
+    for (var k = fx.length - 1; k >= 0; k--) {
+      var f = fx[k];
+      var pr = (t - f.t0) / f.dur;
+      if (pr >= 1) {
+        if (f.kind === "fly") landed[f.gen] = true;
+        fx.splice(k, 1);
+        continue;
+      }
+      if (pr < 0) continue;
+      if (f.kind === "ring") {
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, f.r * (0.3 + 0.7 * pr), 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(255,170,70," + (1 - pr) * 0.9 + ")";
+        ctx.lineWidth = 5 * (1 - pr) + 1;
+        ctx.stroke();
+      } else if (f.kind === "p-heart" || f.kind === "p-skull" || f.kind === "p-spark") {
+        var px = f.x + f.vx * pr * f.dur;
+        var py = f.y + f.vy * pr * f.dur + 200 * pr * pr * f.dur;
+        ctx.globalAlpha = 1 - pr;
+        ctx.font = "16px serif";
+        ctx.textAlign = "center";
+        ctx.fillText(f.kind === "p-heart" ? "💖" : f.kind === "p-skull" ? "💀" : "✦", px, py);
+        ctx.globalAlpha = 1;
+      } else if (f.kind === "fly") {
+        var e = pr * pr * (3 - 2 * pr);
+        var fxp = f.x0 + (f.x1 - f.x0) * e;
+        var fyp = f.y0 + (f.y1 - f.y0) * e - Math.sin(pr * Math.PI) * 60;
+        var img = IMG[f.key];
+        var h = 44, w = img.width * h / img.height;
+        ctx.globalAlpha = 0.95;
+        ctx.drawImage(img, fxp - w / 2, fyp - h / 2, w, h);
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  function drawHud(t) {
+    ctx.font = "bold 17px 'Courier New', monospace";
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(0,0,0,.45)";
+    ctx.fillRect(12, 12, 235, 30);
+    ctx.fillStyle = "#efe9ff";
+    var dispShot = (state.inFlight || state.over) ? state.shot : state.shot + 1;
+    dispShot = Math.max(1, dispShot);
+    ctx.fillText("第 " + dispShot + " 发 · " + (Sim.START_YEAR + dispShot - 1) + " 年", 22, 33);
+    if (state.shot === 0 && !aim) {
+      ctx.font = "bold 22px 'Courier New', monospace";
+      ctx.textAlign = "center";
+      ctx.fillStyle = "rgba(239,233,255," + (0.5 + 0.3 * Math.sin(t * 3)) + ")";
+      ctx.fillText("按 住 拖 拽 瞄 准 , 松 手 开 炮", W / 2, 150);
+    }
+  }
+
+  function frame() {
+    var t = now();
+    ctx.clearRect(0, 0, W, H);
+    if (pending > 0) {
+      ctx.fillStyle = "#9a8fc0";
+      ctx.font = "bold 26px 'Courier New', monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("装填炮弹中……", W / 2, H / 2);
+      requestAnimationFrame(frame);
+      return;
+    }
+    var shx = 0, shy = 0;
+    for (var k = 0; k < fx.length; k++) {
+      if (fx[k].kind === "shake") {
+        var p = (t - fx[k].t0) / fx[k].dur;
+        if (p < 1) { shx += (Math.random() - .5) * 9 * (1 - p); shy += (Math.random() - .5) * 9 * (1 - p); }
+      }
+    }
+    ctx.save();
+    ctx.translate(shx, shy);
+    drawScene(t);
+    drawHeroes(t);
+    drawCannon(t);
+    drawPreview();
+    drawBall(t);
+    drawFx(t);
+    drawAmmo();
+    drawStack(t);
+    drawHud(t);
+    ctx.restore();
+    if (t < flashUntil) {
+      ctx.fillStyle = "rgba(" + flashColor + "," + (flashUntil - t) * 0.5 + ")";
+      ctx.fillRect(0, 0, W, H);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // headless automation hook (harmless in normal play)
+  window.__dbg = {
+    Sim: Sim,
+    getState: function () { return state; },
+    fire: function (vx, vy) {
+      var s = Sim.fire(state, vx, vy);
+      if (s) active = { s: s, t0: now() };
+      return !!s;
+    },
+    busy: function () { return !!active || state.inFlight; }
+  };
+})();
+</script>
+
+</body>
+</html>
