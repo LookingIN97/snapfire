@@ -132,5 +132,29 @@ function missAll(s) { return s.impact && !s.females.length && !s.males.length; }
   }
 })();
 
+/* 6. guarantee: a cleanly hittable female always exists on the field */
+(function () {
+  console.log("hittable-female guarantee");
+  var seeds = 30, bad = 0;
+  for (var seed = 1; seed <= seeds; seed++) {
+    var st = S.createGame(seed);
+    if (!S.findFemaleShot(st)) bad++;
+  }
+  ok(bad === 0, "fresh field solvable for all " + seeds + " seeds");
+
+  // play a long chain of collects: refills must keep the guarantee alive
+  var st2 = S.createGame(1234);
+  var chainOk = true;
+  for (var n = 0; n < 15 && !st2.over; n++) {
+    var sol = S.findFemaleShot(st2);
+    if (!sol) { chainOk = false; break; }
+    var s = S.fire(st2, sol.vx, sol.vy);
+    S.resolve(st2, s);
+    if (!st2.over && !S.findFemaleShot(st2)) { chainOk = false; break; }
+  }
+  ok(chainOk, "guarantee survives 15 consecutive collects/refills");
+  ok(st2.collections.length >= 15 || st2.over, "chain actually collected girls");
+})();
+
 console.log(failures === 0 ? "\nALL PASS" : "\n" + failures + " FAILURES");
 process.exit(failures ? 1 : 0);

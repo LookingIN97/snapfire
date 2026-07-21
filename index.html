@@ -56,6 +56,42 @@
     cursor: crosshair;
   }
 
+  /* cognitive filter toggle */
+  .filter-toggle {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: rgba(14, 9, 26, .85);
+    border: 2px solid var(--gold);
+    box-shadow: 3px 3px 0 rgba(0,0,0,.5);
+    color: var(--gold);
+    font-size: .78rem;
+    font-weight: 700;
+    letter-spacing: .1em;
+    cursor: pointer;
+    user-select: none;
+  }
+  .filter-toggle .track {
+    width: 34px; height: 16px;
+    background: #2a1f47;
+    border: 2px solid currentColor;
+    position: relative;
+  }
+  .filter-toggle .knob {
+    position: absolute;
+    top: 1px; left: 1px;
+    width: 12px; height: 10px;
+    background: currentColor;
+    transition: transform .12s steps(3);
+  }
+  .filter-toggle.on .knob { transform: translateX(16px); }
+  .filter-toggle.off { border-color: #cfc3ac; color: #cfc3ac; }
+
   /* toast banners: 「X代目 · 名字」 */
   .toast {
     position: absolute;
@@ -199,6 +235,9 @@
 
 <div class="arena-wrap" id="wrap">
   <canvas id="arena" width="1800" height="720"></canvas>
+  <div class="filter-toggle on" id="filterToggle" title="关闭认知滤镜后,炮弹将以其本来的面目示人">
+    <span>认知滤镜</span><span class="track"><span class="knob"></span></span><span id="filterState">开</span>
+  </div>
   <div class="overlay" id="overlay">
     <div class="verdict" id="verdict"></div>
     <div class="badge" id="badge"></div>
@@ -241,7 +280,7 @@
   var W = Sim.W, H = Sim.H, GROUND = Sim.GROUND;
 
   /* ---------- assets ---------- */
-  var IMG_KEYS = ["sky", "tower", "cannon", "snapfire", "ball",
+  var IMG_KEYS = ["sky", "tower", "cannon", "snapfire", "ball_lava", "ball_milk",
     "rogers", "cityhall", "condo", "brick", "ocad", "flatiron", "rom", "sign"];
   var i;
   for (i = 0; i < Sim.HEROES.length; i++) IMG_KEYS.push(Sim.HEROES[i].key);
@@ -260,6 +299,23 @@
     return m ? parseInt(m[1], 10) : null;
   })();
   var state = Sim.createGame(SEED);
+
+  /* cognitive filter: on = lava ball, off = the unfiltered truth */
+  var filterOn = localStorage.getItem("snapfire_filter") !== "off";
+  var toggleEl = document.getElementById("filterToggle");
+  var toggleState = document.getElementById("filterState");
+  function renderToggle() {
+    toggleEl.classList.toggle("on", filterOn);
+    toggleEl.classList.toggle("off", !filterOn);
+    toggleState.textContent = filterOn ? "开" : "关";
+  }
+  toggleEl.addEventListener("click", function () {
+    filterOn = !filterOn;
+    localStorage.setItem("snapfire_filter", filterOn ? "on" : "off");
+    renderToggle();
+  });
+  renderToggle();
+  function ballImg() { return filterOn ? IMG.ball_lava : IMG.ball_milk; }
   var active = null;        // shot in flight {s, t0}
   var aim = null;           // {sx, sy, vx, vy, preview}
   var fx = [];
@@ -380,8 +436,8 @@
 
   function stackY(gen) {
     var n = Math.max(state.collections.length, gen);
-    var sp = Math.min(48, (GROUND - 90) / Math.max(n, 1));
-    return 46 + (gen - 0.5) * sp;
+    var sp = Math.min(48, (GROUND - 150) / Math.max(n, 1));
+    return 106 + (gen - 0.5) * sp;
   }
 
   /* ---------- settlement overlay ---------- */
@@ -562,7 +618,7 @@
     ctx.fillText("弹药 ×" + n, 14, GROUND - Math.ceil(n / 2) * 21 - 12);
     for (var k = 0; k < n; k++) {
       var col = k % 2, row = (k / 2) | 0;
-      ctx.drawImage(IMG.ball, 14 + col * 22, GROUND - 24 - row * 21, 20, 20);
+      ctx.drawImage(ballImg(), 14 + col * 22, GROUND - 24 - row * 21, 20, 20);
     }
   }
 
@@ -572,7 +628,7 @@
     ctx.font = "bold 14px 'Courier New', monospace";
     ctx.textAlign = "center";
     ctx.fillStyle = "rgba(240,201,92,.9)";
-    ctx.fillText("代目 ×" + n, W - 40, 26);
+    ctx.fillText("代目 ×" + n, W - 40, 86);
     for (var k = 0; k < n; k++) {
       var c = state.collections[k];
       if (!landed[c.gen]) continue;
@@ -648,10 +704,10 @@
     for (var k = 1; k <= 3; k++) {
       var pi = Math.max(0, idx - 1 - k * 3);
       ctx.globalAlpha = 0.25 - k * 0.06;
-      ctx.drawImage(IMG.ball, path[pi].x - 8, path[pi].y - 8, 16, 16);
+      ctx.drawImage(ballImg(), path[pi].x - 8, path[pi].y - 8, 16, 16);
     }
     ctx.globalAlpha = 1;
-    ctx.drawImage(IMG.ball, x - Sim.BALL_R, y - Sim.BALL_R, Sim.BALL_R * 2, Sim.BALL_R * 2);
+    ctx.drawImage(ballImg(), x - Sim.BALL_R - 1, y - Sim.BALL_R - 1, (Sim.BALL_R + 1) * 2, (Sim.BALL_R + 1) * 2);
   }
 
   function drawFx(t) {

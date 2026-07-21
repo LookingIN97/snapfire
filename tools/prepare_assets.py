@@ -18,6 +18,7 @@ SHEETS = {
     "cn_tower.png": (["tower"], 1000),
     "landmarks1.png": (["rogers", "cityhall", "ocad", "rom"], 420),
     "landmarks2.png": (["flatiron", "sign", "condo", "brick"], 420),
+    # the third sprite (iron ball) is superseded by tools/make_balls.py output
     "actors.png": (["snapfire", "cannon", "ball"], None),  # per-sprite heights below
     "heroes_f1.png": (["cm", "lina", "wr", "mirana"], 200),
     "heroes_f2.png": (["luna", "drow", "qop", "pa"], 200),

@@ -144,48 +144,83 @@
     return false;
   }
 
-  function fillField(state) {
-    var spawns = [];
-    var guard = 0;
-    while (state.field.length < FIELD_SIZE && guard++ < 60) {
-      var used = {};
-      var i;
-      for (i = 0; i < state.field.length; i++) used[state.field[i].anchor] = true;
-      var free = [];
-      for (i = 0; i < ANCHORS.length; i++) if (!used[i]) free.push(i);
-      if (!free.length) break;
-      var ai = free[(state.rng() * free.length) | 0];
-      var g = state.rng() < FEMALE_P ? "f" : "m";
-      var pool = [];
-      for (i = 0; i < HEROES.length; i++) {
-        if (HEROES[i].g === g && !onField(state, HEROES[i].key)) pool.push(HEROES[i]);
-      }
-      if (!pool.length) {
-        for (i = 0; i < HEROES.length; i++) if (HEROES[i].g === g) pool.push(HEROES[i]);
-      }
-      var hero = pool[(state.rng() * pool.length) | 0];
-      var a = ANCHORS[ai];
-      var w = Math.round(hero.asp * HERO_H);
-      var u = {
-        id: state.nextUnitId++,
-        key: hero.key, name: hero.name, g: hero.g,
-        anchor: ai,
-        x0: a.x - w / 2, y0: a.y - HERO_H, w: w, h: HERO_H,
-        phase: state.rng() * Math.PI * 2
-      };
-      state.field.push(u);
-      spawns.push(u);
+  function spawnOne(state, forceGender) {
+    var used = {};
+    var i;
+    for (i = 0; i < state.field.length; i++) used[state.field[i].anchor] = true;
+    var free = [];
+    for (i = 0; i < ANCHORS.length; i++) if (!used[i]) free.push(i);
+    if (!free.length) return null;
+    var ai = free[(state.rng() * free.length) | 0];
+    var g = forceGender || (state.rng() < FEMALE_P ? "f" : "m");
+    var pool = [];
+    for (i = 0; i < HEROES.length; i++) {
+      if (HEROES[i].g === g && !onField(state, HEROES[i].key)) pool.push(HEROES[i]);
     }
-    return spawns;
+    if (!pool.length) {
+      for (i = 0; i < HEROES.length; i++) if (HEROES[i].g === g) pool.push(HEROES[i]);
+    }
+    var hero = pool[(state.rng() * pool.length) | 0];
+    var a = ANCHORS[ai];
+    var w = Math.round(hero.asp * HERO_H);
+    var u = {
+      id: state.nextUnitId++,
+      key: hero.key, name: hero.name, g: hero.g,
+      anchor: ai,
+      x0: a.x - w / 2, y0: a.y - HERO_H, w: w, h: HERO_H,
+      phase: state.rng() * Math.PI * 2
+    };
+    state.field.push(u);
+    return u;
+  }
+
+  /* scan a coarse angle/power grid for a shot whose splash covers at least
+     one female and zero males; a hit found here is also findable by a human */
+  function findFemaleShot(state) {
+    for (var p = POWER_MIN + 100; p <= POWER_MAX; p += 75) {
+      for (var deg = -18; deg <= 80; deg += 3) {
+        var a = deg * Math.PI / 180;
+        var vx = Math.cos(a) * p, vy = -Math.sin(a) * p;
+        var s = computeShot(state, vx, vy, true);
+        if (s.impact && s.females.length && !s.males.length) return { vx: vx, vy: vy };
+      }
+    }
+    return null;
+  }
+
+  function fillField(state) {
+    var added = [];
+    var u;
+    while (state.field.length < FIELD_SIZE) {
+      u = spawnOne(state, null);
+      if (!u) break;
+      added.push(u);
+    }
+    // guarantee: at least one female must be cleanly hittable; otherwise evict
+    // (males first) and force-spawn females elsewhere until the scan succeeds
+    var guard = 0;
+    while (!findFemaleShot(state) && guard++ < 20) {
+      var vi = -1;
+      for (var i = 0; i < state.field.length; i++) {
+        if (state.field[i].g === "m") { vi = i; break; }
+      }
+      if (vi < 0) vi = (state.rng() * state.field.length) | 0;
+      var victim = state.field.splice(vi, 1)[0];
+      var ai = added.indexOf(victim);
+      if (ai >= 0) added.splice(ai, 1);
+      u = spawnOne(state, "f");
+      if (u) added.push(u);
+    }
+    return added;
   }
 
   /* ---------- ballistics (pure: used for both preview and the real shot) ---------- */
-  function computeShot(state, vx, vy) {
+  function computeShot(state, vx, vy, lite) {
     var p = Math.sqrt(vx * vx + vy * vy) || 1;
     var ox = state.muzzle.x + (vx / p) * BARREL;
     var oy = state.muzzle.y + (vy / p) * BARREL;
     var x = ox, y = oy, t = 0, step = 0;
-    var path = [{ x: x, y: y, t: 0 }];
+    var path = lite ? null : [{ x: x, y: y, t: 0 }];
     var impact = null, directHit = null;
     var i, u;
 
@@ -195,7 +230,7 @@
       y += vy * SIM_DT;
       t += SIM_DT;
       step++;
-      if (step % PATH_EVERY === 0) path.push({ x: x, y: y, t: t });
+      if (path && step % PATH_EVERY === 0) path.push({ x: x, y: y, t: t });
 
       if (x < -60 || x > W + 80) break;                    // gone into the lake / off the map
       if (y + BALL_R >= GROUND) {                          // street level
@@ -223,7 +258,7 @@
       }
       if (hit) break;
     }
-    if (impact) path.push({ x: impact.x, y: impact.y, t: t });
+    if (path && impact) path.push({ x: impact.x, y: impact.y, t: t });
 
     var males = [], females = [];
     if (impact) {
@@ -318,6 +353,7 @@
     cnNum: cnNum,
     createGame: createGame,
     computeShot: computeShot,
+    findFemaleShot: findFemaleShot,
     fire: fire,
     resolve: resolve
   };
